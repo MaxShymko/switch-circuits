@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Перекрёстный выключатель</title>
+<style>
+:root{color-scheme:light;--bg:#fff;--text:#273340;--muted:#667384;--wire:#bac3ce;--live:#d46a24;--neutral:#2883cb;--flow:#6b4000;--border:#e1e6ec}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);font:16px system-ui,-apple-system,sans-serif}main{min-height:100svh;max-width:1160px;margin:auto;display:flex;align-items:center;padding:24px}svg{display:block;width:100%;height:auto;overflow:visible}text{fill:var(--text);font:16px system-ui,-apple-system,sans-serif;pointer-events:none;paint-order:stroke fill;stroke:var(--bg);stroke-width:5px;stroke-linejoin:round}.small{font-size:14px;fill:var(--muted)}.wire{fill:none;stroke:var(--wire);stroke-width:4;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}.live{stroke:var(--live)}.neutral{stroke:var(--neutral)}.blade{stroke-width:6}.contact{fill:var(--bg);stroke:var(--wire);stroke-width:3;pointer-events:none}.contact.hot{stroke:var(--live)}.switch-box{fill:var(--bg);stroke:var(--border);stroke-width:1.5;rx:14;pointer-events:none}.switch-hit{cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent}.switch-hit:focus-visible{outline:none}.switch-hit:focus-visible rect{stroke:var(--neutral);stroke-width:3}.switch-hit:hover rect{stroke:var(--neutral)}.lamp{fill:var(--bg);stroke:var(--wire);stroke-width:3;pointer-events:none}.lamp.on{fill:#fff4bd;stroke:#ca9200;filter:drop-shadow(0 0 12px #edbd2638)}.flow{fill:var(--flow);pointer-events:none}@media(max-width:600px){main{padding:12px max(8px,env(safe-area-inset-right)) 12px max(8px,env(safe-area-inset-left));max-width:430px}}
+</style>
+</head>
+<body><main><svg id="diagram" viewBox="0 0 1000 400" aria-labelledby="svg-title svg-desc"></svg></main>
+<script>
+(()=>{
+'use strict';
+const svg=document.getElementById('diagram'),NS='http://www.w3.org/2000/svg',mobile=matchMedia('(max-width:600px)'),reduced=matchMedia('(prefers-reduced-motion:reduce)');
+let bits=[0,0,0],nodes={},edges=[],switches=[],route=null,arrows=[],clock=0,lastTime=0;
+function el(tag,attrs={},parent=svg){const e=document.createElementNS(NS,tag);for(const [k,v]of Object.entries(attrs))e.setAttribute(k,v);parent.appendChild(e);return e}
+function text(x,y,value,cls=''){const e=el('text',{x,y,class:cls,'text-anchor':'middle'});e.textContent=value;return e}
+function node(id,x,y){nodes[id]=[x,y]}
+function edge(a,b,kind='wire',via=[]){edges.push({a,b,kind,via})}
+function build(){
+ nodes={};edges=[];switches=[];
+ if(mobile.matches){
+  node('L',170,40);node('N',309,40);
+  ['S1','X','S2'].forEach((id,i)=>{const y=115+i*195;switches.push({id,x:170,y,vertical:true});if(id==='X'){node('Xa',112,y);node('Xb',228,y);node('Xc',112,y+100);node('Xd',228,y+100)}else{const first=id==='S1';node(id+'c',170,first?y:y+100);node(id+'a',112,first?y+100:y);node(id+'b',228,first?y+100:y)}});
+  node('lampIn',170,665);node('lampOut',170,725);
+ }else{
+  node('L',65,160);node('N',65,320);
+  ['S1','X','S2'].forEach((id,i)=>{const x=235+i*255;switches.push({id,x,y:110,vertical:false});if(id==='X'){node('Xa',x-55,110);node('Xb',x-55,210);node('Xc',x+55,110);node('Xd',x+55,210)}else{const first=id==='S1';node(id+'c',x+(first?-55:55),160);node(id+'a',x+(first?55:-55),110);node(id+'b',x+(first?55:-55),210)}});
+  node('lampIn',880,178);node('lampOut',880,238);
+ }
+ edge('S1c',bits[0]?'S1b':'S1a','blade');edge('Xa',bits[1]?'Xd':'Xc','blade');edge('Xb',bits[1]?'Xc':'Xd','blade');edge('S2c',bits[2]?'S2b':'S2a','blade');
+ edge('L','S1c');edge('S1a','Xa');edge('S1b','Xb');edge('Xc','S2a');edge('Xd','S2b');
+ edge('S2c','lampIn','wire',mobile.matches?[]:[[880,160]]);edge('lampIn','lampOut','load');
+ edge('lampOut','N','neutral',mobile.matches?[[309,725]]:[[880,320]]);
+}
+function traverse(start,excludeLoad=false){const queue=[start],prev={[start]:null};while(queue.length){const a=queue.shift();edges.forEach((e,i)=>{if(excludeLoad&&e.kind==='load')return;const b=e.a===a?e.b:e.b===a?e.a:null;if(b&&!(b in prev)){prev[b]=[a,i];queue.push(b)}})}return prev}
+function dFor(e,reverse=false){const points=[nodes[e.a],...e.via,nodes[e.b]];if(reverse)points.reverse();return 'M'+points.map(p=>p.join(',')).join(' L')}
+function animate(line,from,to){if(!reduced.matches)el('animate',{attributeName:'d',from,to,dur:'.23s',fill:'freeze'},line)}
+function render(changed=-1,old=null){
+ build();const live=traverse('L',true),prev=traverse('L'),on='N' in prev;svg.replaceChildren();svg.setAttribute('viewBox',mobile.matches?'0 0 340 770':'0 0 1000 400');
+ el('title',{id:'svg-title'}).textContent='Два проходных и перекрёстный выключатель';el('desc',{id:'svg-desc'}).textContent=(on?'Лампа горит.':'Лампа не горит.')+' Нажмите на механизм для переключения. Стрелки условно показывают замедленный переменный ток.';
+ switches.forEach(s=>{const {x,y,vertical:v}=s;el('rect',{x:v?70:x-80,y:v?y-22:65,width:v?200:160,height:v?144:195,class:'switch-box'});text(v?38:x,v?y+55:43,s.id)});
+ edges.forEach(e=>{
+  if(e.kind==='load')return;const d=dFor(e),crossing=e.a==='Xb'&&bits[1];let under;
+  if(crossing)under=el('path',{d,fill:'none',stroke:'var(--bg)','stroke-width':13,'pointer-events':'none'});
+  const line=el('path',{d,class:'wire '+(e.kind==='neutral'?'neutral':e.a in live&&e.b in live?'live':'')+(e.kind==='blade'?' blade':'')});
+  if(e.kind==='blade'&&changed>=0&&e.a.startsWith(switches[changed].id)){
+   const id=switches[changed].id;const oldEnd=id==='X'?(e.a==='Xa'?(old?'Xd':'Xc'):(old?'Xc':'Xd')):id+(old?'b':'a');const from='M'+nodes[e.a]+' L'+nodes[oldEnd];animate(line,from,d);if(under)animate(under,from,d);
+  }
+ });
+ switches.forEach(s=>{const keys=s.id==='X'?['a','b','c','d']:['c','a','b'];keys.forEach(k=>{const id=s.id+k,[x,y]=nodes[id];el('circle',{cx:x,cy:y,r:6,class:'contact '+(id in live?'hot':'')});const label=s.id==='X'?{a:'A1',b:'A2',c:'B1',d:'B2'}[k]:{c:'C',a:'1',b:'2'}[k];text(s.vertical?x+(x===228?24:-24):x,s.vertical?y+5:y+(k==='b'||k==='d'?26:-17),label,'small')})});
+ const [lx,top]=nodes.lampIn,ly=top+30;
+ el('circle',{cx:lx,cy:ly,r:30,class:'lamp '+(on?'on':'')});el('path',{d:`M${lx-21},${ly-21} L${lx+21},${ly+21} M${lx+21},${ly-21} L${lx-21},${ly+21}`,class:'wire',style:'stroke:'+(on?'#b18400':'var(--wire)')});
+ const [px,py]=nodes.L,[nx,ny]=nodes.N;text(px-24,py+5,'L');text(mobile.matches?nx:nx+25,mobile.matches?ny-17:ny+30,'N');
+ ['L','N'].forEach(id=>{const [x,y]=nodes[id];el('circle',{cx:x,cy:y,r:5,class:'contact '+(id==='L'?'hot':'')})});
+ route=null;arrows=[];
+ if(on){let chain=[],n='N';while(prev[n]){const [a,i]=prev[n];chain.unshift({edge:edges[i],reverse:edges[i].a!==a});n=a}let d='';chain.forEach((s,i)=>{let part=dFor(s.edge,s.reverse);if(i)part=part.replace(/^M/,'L');d+=part+' '});route=el('path',{d,fill:'none',stroke:'none','pointer-events':'none'});for(let i=0;i<(mobile.matches?22:24);i++)arrows.push(el('path',{d:'M-6,-4 L2,0 L-6,4 L-2,0 Z',class:'flow'}))}
+ switches.forEach((s,i)=>{const {x,y,vertical:v}=s;const g=el('g',{class:'switch-hit',role:'button',tabindex:0,'aria-label':(s.id==='X'?'Перекрёстный':'Проходной '+s.id)+'. '+(s.id==='X'?(bits[i]?'Накрест':'Прямо'):'C соединён с '+(bits[i]?'2':'1')),'aria-pressed':String(!!bits[i])});el('rect',{x:v?70:x-80,y:v?y-22:65,width:v?200:160,height:v?144:195,rx:14,fill:'transparent',stroke:'transparent'},g);g.addEventListener('click',()=>toggle(i));g.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();toggle(i);svg.querySelectorAll('.switch-hit')[i].focus()}})});
+ drawArrows();return on;
+}
+function toggle(i){const old=bits[i];bits[i]=old?0:1;render(i,old)}
+function drawArrows(){if(!route)return;const len=route.getTotalLength(),offset=Math.sin(clock/1300)*70,dir=Math.cos(clock/1300)>=0?1:-1;arrows.forEach((arrow,i)=>{const at=((i*len/arrows.length+offset)%len+len)%len,p=route.getPointAtLength(at),a=route.getPointAtLength(Math.max(0,at-1)),b=route.getPointAtLength(Math.min(len,at+1));const angle=Math.atan2(b.y-a.y,b.x-a.x)*180/Math.PI+(dir<0?180:0);arrow.setAttribute('transform',`translate(${p.x},${p.y}) rotate(${angle})`)})}
+mobile.addEventListener('change',()=>render());render();function frame(t){if(lastTime&&!reduced.matches)clock+=Math.min(t-lastTime,60);lastTime=t;drawArrows();requestAnimationFrame(frame)}requestAnimationFrame(frame);
+window.circuitSimulator={set(next){bits=next.slice(0,3);return render()},getState(){return{bits:bits.slice(),on:!!route}}};
+})();
+</script>
+</body>
+</html>
